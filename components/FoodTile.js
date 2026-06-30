@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet } from 'react-native';
 import { C } from '../constants';
+import { supabase } from '../supabase';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { searchFoods, extractNutrition } from '../nutritionApi';
 
 const QUICK_SUGGESTIONS = [
   'Eggs & toast', 'Salad', 'Soup', 'Sandwich', 'Burger',
@@ -13,10 +16,7 @@ const FEELS = ['Satisfied', 'Unsatisfied'];
 const SOURCES = ['Homemade', 'Restaurant'];
 
 const NYLA_RESPONSES = {
-  Great: 'That\'s a great sign -- your body is responding well to this meal in luteal phase.',
-  Good: 'Good fuel. Consistent meals like this help stabilize your energy through luteal.',
-  Okay: 'Okay is fine. Your appetite naturally shifts in luteal -- don\'t overthink it.',
-  Heavy: 'Feeling heavy after eating is common in luteal. Lighter portions and more water can help.',
+  Satisfied: 'That\'s a great sign -- your body is responding well to this meal in luteal phase.',
   Unsatisfied: 'Luteal cravings are real -- progesterone drives appetite up. A small protein snack can help bridge the gap.',
 };
 
@@ -34,32 +34,75 @@ function SwapFlow({ onComplete, onCancel }) {
   const [source, setSource] = useState(null);
   const [portion, setPortion] = useState(null);
   const [feel, setFeel] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
 
-  function toggleItem(item) {
-    if (selected.includes(item)) {
-      setSelected(selected.filter((s) => s !== item));
+function toggleItem(food) {
+    const exists = selected.some((s) => s.foodId === food.foodId);
+    if (exists) {
+      setSelected(selected.filter((s) => s.foodId !== food.foodId));
     } else {
-      setSelected([...selected, item]);
+      setSelected([...selected, food]);
     }
   }
 
-  if (step === 1) {
+  async function handleSearchChange(text) {
+    setSearchQuery(text);
+    if (text.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    const results = await searchFoods(text);
+    setSearchResults(results.slice(0, 8));
+    setSearching(false);
+  }
+
+if (step === 1) {
     return (
       <View>
         <Text style={styles.swapQuestion}>What did you have?</Text>
-        <View style={styles.chipGrid}>
-          {QUICK_SUGGESTIONS.map((s) => (
-            <TouchableOpacity
-              key={s}
-              style={[styles.suggChip, selected.includes(s) && styles.suggChipOn]}
-              onPress={() => toggleItem(s)}
-            >
-              <Text style={[styles.suggChipText, selected.includes(s) && styles.suggChipTextOn]}>
-                {s}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Type to search foods…"
+          placeholderTextColor="rgba(255,255,255,0.5)"
+          value={searchQuery}
+          onChangeText={handleSearchChange}
+        />
+
+        {searching && (
+          <Text style={styles.searchingText}>Searching…</Text>
+        )}
+
+{searchResults.length > 0 && (
+          <View style={styles.searchResults}>
+            {searchResults.map((food, index) => (
+  <TouchableOpacity
+    key={`${food.foodId}-${index}`}
+                style={styles.searchResultRow}
+                onPress={() => toggleItem(food)}
+              >
+                <Text style={styles.searchResultText}>{food.description}</Text>
+                {selected.some((s) => s.foodId === food.foodId) && (
+                  <Text style={styles.searchResultCheck}>✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {selected.length > 0 && (
+          <View style={styles.chipGrid}>
+            {selected.map((item) => (
+              <View key={item.foodId} style={[styles.suggChip, styles.suggChipOn]}>
+                <Text style={styles.suggChipTextOn}>{item.description}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         <View style={styles.swapActions}>
           <TouchableOpacity style={styles.swapCancelBtn} onPress={onCancel}>
             <Text style={styles.swapCancelText}>Cancel</Text>
@@ -167,19 +210,24 @@ function SwapFlow({ onComplete, onCancel }) {
 
 // Single meal row
 function MealRow({ meal, onLog, onSwap, onAddMore }) {
-  const [showTimeConfirm, setShowTimeConfirm] = useState(false);
+  const [logStep, setLogStep] = useState(null); // null, 'time', or 'feel'
+  const [selectedTime, setSelectedTime] = useState(new Date());
   const [swapping, setSwapping] = useState(false);
   const [addingMore, setAddingMore] = useState(false);
 
-  function handleLogPress() {
-    setShowTimeConfirm(true);
+  function startLogging() {
+    setSelectedTime(new Date());
+    setLogStep('time');
   }
 
-  function handleTimeConfirm() {
-    const now = new Date();
-    const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setShowTimeConfirm(false);
-    onLog(time);
+  function handleTimeNext() {
+    setLogStep('feel');
+  }
+
+  function handleFeelSelect(feel) {
+    const time = selectedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setLogStep(null);
+    onLog(time, feel);
   }
 
   if (swapping || addingMore) {
@@ -207,20 +255,53 @@ function MealRow({ meal, onLog, onSwap, onAddMore }) {
     );
   }
 
-  if (showTimeConfirm) {
+  if (logStep === 'time') {
     return (
       <View style={styles.mealRow}>
         <Text style={styles.mealPeriod}>{meal.period}</Text>
         <Text style={styles.mealName}>{meal.name}</Text>
         <Text style={styles.timeQuestion}>What time did you eat this?</Text>
+        <DateTimePicker
+          value={selectedTime}
+          mode="time"
+          display="spinner"
+          onChange={(event, date) => {
+            if (date) setSelectedTime(date);
+          }}
+          textColor="#fff"
+        />
         <View style={styles.swapActions}>
-          <TouchableOpacity style={styles.swapCancelBtn} onPress={() => setShowTimeConfirm(false)}>
+          <TouchableOpacity style={styles.swapCancelBtn} onPress={() => setLogStep(null)}>
             <Text style={styles.swapCancelText}>Cancel</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.swapNextBtn} onPress={handleTimeConfirm}>
-            <Text style={styles.swapNextText}>Now ✓</Text>
+          <TouchableOpacity style={styles.swapNextBtn} onPress={handleTimeNext}>
+            <Text style={styles.swapNextText}>Next →</Text>
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  }
+
+  if (logStep === 'feel') {
+    return (
+      <View style={styles.mealRow}>
+        <Text style={styles.mealPeriod}>{meal.period}</Text>
+        <Text style={styles.mealName}>{meal.name}</Text>
+        <Text style={styles.swapQuestion}>How did it make you feel?</Text>
+        <View style={styles.chipGrid}>
+          {FEELS.map((f) => (
+            <TouchableOpacity
+              key={f}
+              style={styles.suggChip}
+              onPress={() => handleFeelSelect(f)}
+            >
+              <Text style={styles.suggChipText}>{f}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TouchableOpacity style={styles.swapCancelBtn} onPress={() => setLogStep('time')}>
+          <Text style={styles.swapCancelText}>← Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -247,7 +328,7 @@ function MealRow({ meal, onLog, onSwap, onAddMore }) {
         </View>
       ) : (
         <View style={styles.mealActions}>
-          <TouchableOpacity style={styles.logBtn} onPress={handleLogPress}>
+          <TouchableOpacity style={styles.logBtn} onPress={startLogging}>
             <Text style={styles.logBtnText}>I ate this</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.swapBtnSmall} onPress={() => setSwapping(true)}>
@@ -267,21 +348,85 @@ export default function FoodTile() {
 
   const loggedCount = meals.filter((m) => m.logged).length + extraMeals.filter((m) => m.logged).length;
 
-  function handleLog(id, time) {
+  async function handleLog(id, time, feel) {
+    const meal = meals.find((m) => m.id === id);
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { error } = await supabase.from('logged_meals').insert({
+      user_id: user.id,
+      date: new Date().toISOString().split('T')[0],
+      period: meal.period,
+      meal_name: meal.name,
+      feel: feel,
+      was_swap: false,
+      logged_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.log('Error logging meal:', error.message);
+      return;
+    }
+
     setMeals(meals.map((m) =>
-      m.id === id ? { ...m, logged: true, loggedTime: time } : m
+      m.id === id ? { ...m, logged: true, loggedTime: time, nylaResponse: NYLA_RESPONSES[feel] } : m
     ));
   }
 
-  function handleSwap(id, data) {
+  async function handleSwap(id, data) {
+    const meal = meals.find((m) => m.id === id);
+    const newName = data.items.map((item) => item.description).join(', ');
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { error } = await supabase.from('logged_meals').insert({
+      user_id: user.id,
+      date: new Date().toISOString().split('T')[0],
+      period: meal.period,
+      meal_name: newName,
+      source: data.source,
+      portion: data.portion,
+      feel: data.feel,
+      was_swap: true,
+      logged_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.log('Error logging swap:', error.message);
+      return;
+    }
+
     setMeals(meals.map((m) =>
       m.id === id
-        ? { ...m, logged: true, loggedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), name: data.items.join(', '), nylaResponse: NYLA_RESPONSES[data.feel] }
+        ? { ...m, logged: true, loggedTime: time, name: newName, nylaResponse: NYLA_RESPONSES[data.feel] }
         : m
     ));
   }
 
-  function handleAddMore(id, data) {
+  async function handleAddMore(id, data) {
+    const meal = meals.find((m) => m.id === id);
+const newName = data.items.map((item) => item.description).join(', ');
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { error } = await supabase.from('logged_meals').insert({
+      user_id: user.id,
+      date: new Date().toISOString().split('T')[0],
+      period: meal.period,
+      meal_name: newName,
+      source: data.source,
+      portion: data.portion,
+      feel: data.feel,
+      was_swap: true,
+      logged_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.log('Error logging add-more:', error.message);
+      return;
+    }
+
     setMeals(meals.map((m) =>
       m.id === id
         ? { ...m, extras: [...(m.extras || []), data] }
@@ -289,21 +434,85 @@ export default function FoodTile() {
     ));
   }
 
-  function handleExtraLog(id, time) {
+  async function handleExtraLog(id, time, feel) {
+    const meal = extraMeals.find((m) => m.id === id);
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { error } = await supabase.from('logged_meals').insert({
+      user_id: user.id,
+      date: new Date().toISOString().split('T')[0],
+      period: meal.period,
+      meal_name: meal.name,
+      feel: feel,
+      was_swap: false,
+      logged_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.log('Error logging extra meal:', error.message);
+      return;
+    }
+
     setExtraMeals(extraMeals.map((m) =>
-      m.id === id ? { ...m, logged: true, loggedTime: time } : m
+      m.id === id ? { ...m, logged: true, loggedTime: time, nylaResponse: NYLA_RESPONSES[feel] } : m
     ));
   }
 
-  function handleExtraSwap(id, data) {
+  async function handleExtraSwap(id, data) {
+    const meal = extraMeals.find((m) => m.id === id);
+    const newName = data.items.map((item) => item.description).join(', ');
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { error } = await supabase.from('logged_meals').insert({
+      user_id: user.id,
+      date: new Date().toISOString().split('T')[0],
+      period: meal.period,
+      meal_name: newName,
+      source: data.source,
+      portion: data.portion,
+      feel: data.feel,
+      was_swap: true,
+      logged_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.log('Error logging extra swap:', error.message);
+      return;
+    }
+
     setExtraMeals(extraMeals.map((m) =>
       m.id === id
-        ? { ...m, logged: true, loggedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), name: data.items.join(', '), nylaResponse: NYLA_RESPONSES[data.feel] }
+        ? { ...m, logged: true, loggedTime: time, name: newName, nylaResponse: NYLA_RESPONSES[data.feel] }
         : m
     ));
   }
 
-  function handleExtraAddMore(id, data) {
+  async function handleExtraAddMore(id, data) {
+    const meal = extraMeals.find((m) => m.id === id);
+    const newName = data.items.map((item) => item.description).join(', ');
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { error } = await supabase.from('logged_meals').insert({
+      user_id: user.id,
+      date: new Date().toISOString().split('T')[0],
+      period: meal.period,
+      meal_name: newName,
+      source: data.source,
+      portion: data.portion,
+      feel: data.feel,
+      was_swap: true,
+      logged_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.log('Error logging extra add-more:', error.message);
+      return;
+    }
+
     setExtraMeals(extraMeals.map((m) =>
       m.id === id
         ? { ...m, extras: [...(m.extras || []), data] }
@@ -339,7 +548,7 @@ export default function FoodTile() {
             <MealRow
               key={meal.id}
               meal={meal}
-              onLog={(time) => handleLog(meal.id, time)}
+              onLog={(time, feel) => handleLog(meal.id, time, feel)}
               onSwap={(data) => handleSwap(meal.id, data)}
               onAddMore={(data) => handleAddMore(meal.id, data)}
             />
@@ -349,7 +558,7 @@ export default function FoodTile() {
             <MealRow
               key={meal.id}
               meal={meal}
-              onLog={(time) => handleExtraLog(meal.id, time)}
+              onLog={(time, feel) => handleExtraLog(meal.id, time, feel)}
               onSwap={(data) => handleExtraSwap(meal.id, data)}
               onAddMore={(data) => handleExtraAddMore(meal.id, data)}
             />
