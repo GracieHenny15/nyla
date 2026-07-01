@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { supabase } from '../supabase';
 
@@ -22,7 +22,6 @@ function SliderRow({ scale, value, onChange }) {
   return (
     <View style={styles.sliderRow}>
       <Text style={styles.sliderLabel}>{scale.label}</Text>
-
       <Slider
         style={styles.slider}
         minimumValue={1}
@@ -34,7 +33,6 @@ function SliderRow({ scale, value, onChange }) {
         maximumTrackTintColor="rgba(255,255,255,0.25)"
         thumbTintColor="#fff"
       />
-
       <View style={styles.sliderMarks}>
         <Text style={styles.sliderMarkText}>{scale.lo} (1)</Text>
         <Text style={styles.sliderMarkText}>Moderate (5)</Text>
@@ -48,17 +46,10 @@ export default function MoodTile() {
   const [expanded, setExpanded] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [todayCount, setTodayCount] = useState(0);
-
   const [values, setValues] = useState({
-    mood: 5,
-    energy: 5,
-    anxiety: 5,
-    cravings: 5,
-    clarity: 5,
-    motivation: 5,
-    digestion: 5,
+    mood: 5, energy: 5, anxiety: 5, cravings: 5,
+    clarity: 5, motivation: 5, digestion: 5,
   });
-
   const [selectedSymptoms, setSelectedSymptoms] = useState([]);
   const [note, setNote] = useState('');
 
@@ -68,19 +59,13 @@ export default function MoodTile() {
 
   async function loadTodayCount() {
     const { data: { user } } = await supabase.auth.getUser();
-    const today = new Date().toISOString().split('T')[0];
-
+    const today = new Date().toLocaleDateString('en-CA');
     const { data, error } = await supabase
       .from('mood_logs')
       .select('id')
       .eq('user_id', user.id)
       .eq('date', today);
-
-    if (error) {
-      console.log('Error loading mood logs:', error.message);
-      return;
-    }
-
+    if (error) { console.log('Error loading mood logs:', error.message); return; }
     setTodayCount(data.length);
   }
 
@@ -98,46 +83,25 @@ export default function MoodTile() {
 
   async function saveMood() {
     const { data: { user } } = await supabase.auth.getUser();
-    const today = new Date().toISOString().split('T')[0];
-
+    const today = new Date().toLocaleDateString('en-CA');
     const { error } = await supabase.from('mood_logs').insert({
       user_id: user.id,
       date: today,
-      mood: values.mood,
-      energy: values.energy,
-      anxiety: values.anxiety,
-      cravings: values.cravings,
-      clarity: values.clarity,
-      motivation: values.motivation,
-      digestion: values.digestion,
+      ...values,
       symptoms: selectedSymptoms,
       note: note || null,
     });
-
-    if (error) {
-      console.log('Error saving mood log:', error.message);
-      return;
-    }
-
+    if (error) { console.log('Error saving mood log:', error.message); return; }
     setTodayCount((prev) => prev + 1);
     setExpanded(false);
-
-    setValues({
-      mood: 5,
-      energy: 5,
-      anxiety: 5,
-      cravings: 5,
-      clarity: 5,
-      motivation: 5,
-      digestion: 5,
-    });
+    setValues({ mood: 5, energy: 5, anxiety: 5, cravings: 5, clarity: 5, motivation: 5, digestion: 5 });
     setSelectedSymptoms([]);
     setNote('');
   }
 
   return (
     <View style={styles.wrapper}>
-      <TouchableOpacity style={styles.tile} onPress={() => setExpanded(!expanded)} activeOpacity={0.8}>
+      <TouchableOpacity style={styles.tile} onPress={() => setExpanded(true)} activeOpacity={0.8}>
         <Text style={styles.icon}>🌸</Text>
         <Text style={styles.label}>Mood</Text>
         <Text style={styles.val}>
@@ -145,100 +109,101 @@ export default function MoodTile() {
         </Text>
       </TouchableOpacity>
 
-      {expanded && (
+      <Modal
+        visible={expanded}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setExpanded(false)}
+      >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.panel}
+          style={styles.modalOverlay}
         >
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>How are you feeling?</Text>
-            <TouchableOpacity onPress={() => setExpanded(false)}>
-              <Text style={styles.doneBtn}>Done ✓</Text>
-            </TouchableOpacity>
-          </View>
-
-          {CORE_SCALES.map((scale) => (
-            <SliderRow
-              key={scale.key}
-              scale={scale}
-              value={values[scale.key]}
-              onChange={(val) => updateValue(scale.key, val)}
-            />
-          ))}
-
-          <Text style={styles.sectionLabel}>
-            Symptoms <Text style={styles.optionalText}>(optional)</Text>
-          </Text>
-          <View style={styles.symptomGrid}>
-            {SYMPTOMS.map((symptom) => (
-              <TouchableOpacity
-                key={symptom}
-                style={[
-                  styles.symptomChip,
-                  selectedSymptoms.includes(symptom) && styles.symptomChipActive,
-                ]}
-                onPress={() => toggleSymptom(symptom)}
-              >
-                <Text
-                  style={[
-                    styles.symptomText,
-                    selectedSymptoms.includes(symptom) && styles.symptomTextActive,
-                  ]}
-                >
-                  {symptom}
-                </Text>
+          <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>How are you feeling?</Text>
+              <TouchableOpacity onPress={() => setExpanded(false)}>
+                <Text style={styles.doneBtn}>Done ✓</Text>
               </TouchableOpacity>
+            </View>
+
+            {CORE_SCALES.map((scale) => (
+              <SliderRow
+                key={scale.key}
+                scale={scale}
+                value={values[scale.key]}
+                onChange={(val) => updateValue(scale.key, val)}
+              />
             ))}
-          </View>
 
-          <TouchableOpacity
-            style={styles.advancedToggle}
-            onPress={() => setShowAdvanced(!showAdvanced)}
-          >
-            <Text style={styles.advancedToggleText}>Advanced tracking</Text>
-            <Text style={styles.advancedArrow}>{showAdvanced ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-
-          {showAdvanced && (
-            <View>
-              {ADVANCED_SCALES.map((scale) => (
-                <SliderRow
-                  key={scale.key}
-                  scale={scale}
-                  value={values[scale.key]}
-                  onChange={(val) => updateValue(scale.key, val)}
-                />
+            <Text style={styles.sectionLabel}>
+              Symptoms <Text style={styles.optionalText}>(optional)</Text>
+            </Text>
+            <View style={styles.symptomGrid}>
+              {SYMPTOMS.map((symptom) => (
+                <TouchableOpacity
+                  key={symptom}
+                  style={[styles.symptomChip, selectedSymptoms.includes(symptom) && styles.symptomChipActive]}
+                  onPress={() => toggleSymptom(symptom)}
+                >
+                  <Text style={[styles.symptomText, selectedSymptoms.includes(symptom) && styles.symptomTextActive]}>
+                    {symptom}
+                  </Text>
+                </TouchableOpacity>
               ))}
             </View>
-          )}
 
-          <TextInput
-            style={styles.noteInput}
-            placeholder="Anything unusual today? (optional)"
-            placeholderTextColor="rgba(255,255,255,0.5)"
-            value={note}
-            onChangeText={setNote}
-            multiline
-          />
+            <TouchableOpacity
+              style={styles.advancedToggle}
+              onPress={() => setShowAdvanced(!showAdvanced)}
+            >
+              <Text style={styles.advancedToggleText}>Advanced tracking</Text>
+              <Text style={styles.advancedArrow}>{showAdvanced ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.saveBtn} onPress={saveMood}>
-            <Text style={styles.saveBtnText}>Save check-in</Text>
-          </TouchableOpacity>
+            {showAdvanced && (
+              <View>
+                {ADVANCED_SCALES.map((scale) => (
+                  <SliderRow
+                    key={scale.key}
+                    scale={scale}
+                    value={values[scale.key]}
+                    onChange={(val) => updateValue(scale.key, val)}
+                  />
+                ))}
+              </View>
+            )}
+
+            <TextInput
+              style={styles.noteInput}
+              placeholder="Anything unusual today? (optional)"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+              value={note}
+              onChangeText={setNote}
+              multiline
+            />
+
+            <TouchableOpacity style={styles.saveBtn} onPress={saveMood}>
+              <Text style={styles.saveBtnText}>Save check-in</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </KeyboardAvoidingView>
-      )}
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: 10,
+    flex: 1,
   },
   tile: {
     backgroundColor: '#C8E0DC',
     borderRadius: 16,
     padding: 14,
     alignItems: 'center',
+    aspectRatio: 1,
+    justifyContent: 'center',
   },
   icon: {
     fontSize: 24,
@@ -254,12 +219,21 @@ const styles = StyleSheet.create({
   val: {
     fontSize: 11,
     color: '#3A7868',
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
   },
   panel: {
     backgroundColor: '#4A8A80',
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 8,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+  },
+  panelContent: {
+    padding: 20,
   },
   panelHeader: {
     flexDirection: 'row',

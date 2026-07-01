@@ -1,15 +1,9 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, Modal } from 'react-native';
 import { C } from '../constants';
 import { supabase } from '../supabase';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { searchFoods, extractNutrition } from '../nutritionApi';
-
-const QUICK_SUGGESTIONS = [
-  'Eggs & toast', 'Salad', 'Soup', 'Sandwich', 'Burger',
-  'Fries', 'Pizza', 'Sushi', 'Leftovers', 'Smoothie',
-  'Oatmeal', 'Yogurt', 'Fruit', 'Nuts', 'Protein bar',
-];
+import { searchFoods } from '../nutritionApi';
 
 const PORTIONS = ['Small', 'Medium', 'Large', 'Extra large'];
 const FEELS = ['Satisfied', 'Unsatisfied'];
@@ -27,7 +21,6 @@ const DEFAULT_MEALS = [
   { id: 'snack', period: 'Snack', name: 'Dark chocolate & almonds' },
 ];
 
-// Swap flow component
 function SwapFlow({ onComplete, onCancel }) {
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState([]);
@@ -38,7 +31,7 @@ function SwapFlow({ onComplete, onCancel }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
 
-function toggleItem(food) {
+  function toggleItem(food) {
     const exists = selected.some((s) => s.foodId === food.foodId);
     if (exists) {
       setSelected(selected.filter((s) => s.foodId !== food.foodId));
@@ -49,21 +42,17 @@ function toggleItem(food) {
 
   async function handleSearchChange(text) {
     setSearchQuery(text);
-    if (text.length < 2) {
-      setSearchResults([]);
-      return;
-    }
+    if (text.length < 2) { setSearchResults([]); return; }
     setSearching(true);
     const results = await searchFoods(text);
     setSearchResults(results.slice(0, 8));
     setSearching(false);
   }
 
-if (step === 1) {
+  if (step === 1) {
     return (
       <View>
         <Text style={styles.swapQuestion}>What did you have?</Text>
-
         <TextInput
           style={styles.searchInput}
           placeholder="Type to search foods…"
@@ -71,16 +60,12 @@ if (step === 1) {
           value={searchQuery}
           onChangeText={handleSearchChange}
         />
-
-        {searching && (
-          <Text style={styles.searchingText}>Searching…</Text>
-        )}
-
-{searchResults.length > 0 && (
+        {searching && <Text style={styles.searchingText}>Searching…</Text>}
+        {searchResults.length > 0 && (
           <View style={styles.searchResults}>
             {searchResults.map((food, index) => (
-  <TouchableOpacity
-    key={`${food.foodId}-${index}`}
+              <TouchableOpacity
+                key={`${food.foodId}-${index}`}
                 style={styles.searchResultRow}
                 onPress={() => toggleItem(food)}
               >
@@ -92,7 +77,6 @@ if (step === 1) {
             ))}
           </View>
         )}
-
         {selected.length > 0 && (
           <View style={styles.chipGrid}>
             {selected.map((item) => (
@@ -102,7 +86,6 @@ if (step === 1) {
             ))}
           </View>
         )}
-
         <View style={styles.swapActions}>
           <TouchableOpacity style={styles.swapCancelBtn} onPress={onCancel}>
             <Text style={styles.swapCancelText}>Cancel</Text>
@@ -208,9 +191,8 @@ if (step === 1) {
   }
 }
 
-// Single meal row
 function MealRow({ meal, onLog, onSwap, onAddMore }) {
-  const [logStep, setLogStep] = useState(null); // null, 'time', or 'feel'
+  const [logStep, setLogStep] = useState(null);
   const [selectedTime, setSelectedTime] = useState(new Date());
   const [swapping, setSwapping] = useState(false);
   const [addingMore, setAddingMore] = useState(false);
@@ -220,9 +202,7 @@ function MealRow({ meal, onLog, onSwap, onAddMore }) {
     setLogStep('time');
   }
 
-  function handleTimeNext() {
-    setLogStep('feel');
-  }
+  function handleTimeNext() { setLogStep('feel'); }
 
   function handleFeelSelect(feel) {
     const time = selectedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -238,18 +218,12 @@ function MealRow({ meal, onLog, onSwap, onAddMore }) {
         <View style={styles.swapDivider} />
         <SwapFlow
           onComplete={(data) => {
-            if (addingMore) {
-              onAddMore(data);
-            } else {
-              onSwap(data);
-            }
+            if (addingMore) onAddMore(data);
+            else onSwap(data);
             setSwapping(false);
             setAddingMore(false);
           }}
-          onCancel={() => {
-            setSwapping(false);
-            setAddingMore(false);
-          }}
+          onCancel={() => { setSwapping(false); setAddingMore(false); }}
         />
       </View>
     );
@@ -265,9 +239,7 @@ function MealRow({ meal, onLog, onSwap, onAddMore }) {
           value={selectedTime}
           mode="time"
           display="spinner"
-          onChange={(event, date) => {
-            if (date) setSelectedTime(date);
-          }}
+          onChange={(event, date) => { if (date) setSelectedTime(date); }}
           textColor="#fff"
         />
         <View style={styles.swapActions}>
@@ -290,11 +262,7 @@ function MealRow({ meal, onLog, onSwap, onAddMore }) {
         <Text style={styles.swapQuestion}>How did it make you feel?</Text>
         <View style={styles.chipGrid}>
           {FEELS.map((f) => (
-            <TouchableOpacity
-              key={f}
-              style={styles.suggChip}
-              onPress={() => handleFeelSelect(f)}
-            >
+            <TouchableOpacity key={f} style={styles.suggChip} onPress={() => handleFeelSelect(f)}>
               <Text style={styles.suggChipText}>{f}</Text>
             </TouchableOpacity>
           ))}
@@ -310,12 +278,13 @@ function MealRow({ meal, onLog, onSwap, onAddMore }) {
     <View style={styles.mealRow}>
       <Text style={styles.mealPeriod}>{meal.period}</Text>
       <Text style={styles.mealName}>{meal.name}</Text>
-
       {meal.logged ? (
         <View>
           <Text style={styles.loggedText}>✓ Logged at {meal.loggedTime}</Text>
           {meal.extras && meal.extras.length > 0 && (
-            <Text style={styles.extrasText}>+ {meal.extras.map(e => e.items.join(', ')).join(', ')}</Text>
+            <Text style={styles.extrasText}>
+              + {meal.extras.map(e => e.items.map(i => i.description).join(', ')).join(', ')}
+            </Text>
           )}
           {meal.nylaResponse && (
             <View style={styles.nylaResponse}>
@@ -340,7 +309,6 @@ function MealRow({ meal, onLog, onSwap, onAddMore }) {
   );
 }
 
-// Main food tile
 export default function FoodTile() {
   const [expanded, setExpanded] = useState(false);
   const [meals, setMeals] = useState(DEFAULT_MEALS);
@@ -350,24 +318,17 @@ export default function FoodTile() {
 
   async function handleLog(id, time, feel) {
     const meal = meals.find((m) => m.id === id);
-
     const { data: { user } } = await supabase.auth.getUser();
-
     const { error } = await supabase.from('logged_meals').insert({
       user_id: user.id,
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toLocaleDateString('en-CA'),
       period: meal.period,
       meal_name: meal.name,
-      feel: feel,
+      feel,
       was_swap: false,
       logged_at: new Date().toISOString(),
     });
-
-    if (error) {
-      console.log('Error logging meal:', error.message);
-      return;
-    }
-
+    if (error) { console.log('Error logging meal:', error.message); return; }
     setMeals(meals.map((m) =>
       m.id === id ? { ...m, logged: true, loggedTime: time, nylaResponse: NYLA_RESPONSES[feel] } : m
     ));
@@ -377,12 +338,10 @@ export default function FoodTile() {
     const meal = meals.find((m) => m.id === id);
     const newName = data.items.map((item) => item.description).join(', ');
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
     const { data: { user } } = await supabase.auth.getUser();
-
     const { error } = await supabase.from('logged_meals').insert({
       user_id: user.id,
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toLocaleDateString('en-CA'),
       period: meal.period,
       meal_name: newName,
       source: data.source,
@@ -391,28 +350,19 @@ export default function FoodTile() {
       was_swap: true,
       logged_at: new Date().toISOString(),
     });
-
-    if (error) {
-      console.log('Error logging swap:', error.message);
-      return;
-    }
-
+    if (error) { console.log('Error logging swap:', error.message); return; }
     setMeals(meals.map((m) =>
-      m.id === id
-        ? { ...m, logged: true, loggedTime: time, name: newName, nylaResponse: NYLA_RESPONSES[data.feel] }
-        : m
+      m.id === id ? { ...m, logged: true, loggedTime: time, name: newName, nylaResponse: NYLA_RESPONSES[data.feel] } : m
     ));
   }
 
   async function handleAddMore(id, data) {
     const meal = meals.find((m) => m.id === id);
-const newName = data.items.map((item) => item.description).join(', ');
-
+    const newName = data.items.map((item) => item.description).join(', ');
     const { data: { user } } = await supabase.auth.getUser();
-
     const { error } = await supabase.from('logged_meals').insert({
       user_id: user.id,
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toLocaleDateString('en-CA'),
       period: meal.period,
       meal_name: newName,
       source: data.source,
@@ -421,39 +371,25 @@ const newName = data.items.map((item) => item.description).join(', ');
       was_swap: true,
       logged_at: new Date().toISOString(),
     });
-
-    if (error) {
-      console.log('Error logging add-more:', error.message);
-      return;
-    }
-
+    if (error) { console.log('Error logging add-more:', error.message); return; }
     setMeals(meals.map((m) =>
-      m.id === id
-        ? { ...m, extras: [...(m.extras || []), data] }
-        : m
+      m.id === id ? { ...m, extras: [...(m.extras || []), data] } : m
     ));
   }
 
   async function handleExtraLog(id, time, feel) {
     const meal = extraMeals.find((m) => m.id === id);
-
     const { data: { user } } = await supabase.auth.getUser();
-
     const { error } = await supabase.from('logged_meals').insert({
       user_id: user.id,
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toLocaleDateString('en-CA'),
       period: meal.period,
       meal_name: meal.name,
-      feel: feel,
+      feel,
       was_swap: false,
       logged_at: new Date().toISOString(),
     });
-
-    if (error) {
-      console.log('Error logging extra meal:', error.message);
-      return;
-    }
-
+    if (error) { console.log('Error logging extra meal:', error.message); return; }
     setExtraMeals(extraMeals.map((m) =>
       m.id === id ? { ...m, logged: true, loggedTime: time, nylaResponse: NYLA_RESPONSES[feel] } : m
     ));
@@ -463,12 +399,10 @@ const newName = data.items.map((item) => item.description).join(', ');
     const meal = extraMeals.find((m) => m.id === id);
     const newName = data.items.map((item) => item.description).join(', ');
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
     const { data: { user } } = await supabase.auth.getUser();
-
     const { error } = await supabase.from('logged_meals').insert({
       user_id: user.id,
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toLocaleDateString('en-CA'),
       period: meal.period,
       meal_name: newName,
       source: data.source,
@@ -477,28 +411,19 @@ const newName = data.items.map((item) => item.description).join(', ');
       was_swap: true,
       logged_at: new Date().toISOString(),
     });
-
-    if (error) {
-      console.log('Error logging extra swap:', error.message);
-      return;
-    }
-
+    if (error) { console.log('Error logging extra swap:', error.message); return; }
     setExtraMeals(extraMeals.map((m) =>
-      m.id === id
-        ? { ...m, logged: true, loggedTime: time, name: newName, nylaResponse: NYLA_RESPONSES[data.feel] }
-        : m
+      m.id === id ? { ...m, logged: true, loggedTime: time, name: newName, nylaResponse: NYLA_RESPONSES[data.feel] } : m
     ));
   }
 
   async function handleExtraAddMore(id, data) {
     const meal = extraMeals.find((m) => m.id === id);
     const newName = data.items.map((item) => item.description).join(', ');
-
     const { data: { user } } = await supabase.auth.getUser();
-
     const { error } = await supabase.from('logged_meals').insert({
       user_id: user.id,
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toLocaleDateString('en-CA'),
       period: meal.period,
       meal_name: newName,
       source: data.source,
@@ -507,16 +432,9 @@ const newName = data.items.map((item) => item.description).join(', ');
       was_swap: true,
       logged_at: new Date().toISOString(),
     });
-
-    if (error) {
-      console.log('Error logging extra add-more:', error.message);
-      return;
-    }
-
+    if (error) { console.log('Error logging extra add-more:', error.message); return; }
     setExtraMeals(extraMeals.map((m) =>
-      m.id === id
-        ? { ...m, extras: [...(m.extras || []), data] }
-        : m
+      m.id === id ? { ...m, extras: [...(m.extras || []), data] } : m
     ));
   }
 
@@ -527,7 +445,8 @@ const newName = data.items.map((item) => item.description).join(', ');
 
   return (
     <View style={styles.wrapper}>
-      <TouchableOpacity style={styles.tile} onPress={() => setExpanded(!expanded)} activeOpacity={0.8}>
+      {/* Compact square tile */}
+      <TouchableOpacity style={styles.tile} onPress={() => setExpanded(true)} activeOpacity={0.8}>
         <Text style={styles.icon}>🍎</Text>
         <Text style={styles.label}>Food</Text>
         <Text style={styles.val}>
@@ -535,53 +454,63 @@ const newName = data.items.map((item) => item.description).join(', ');
         </Text>
       </TouchableOpacity>
 
-      {expanded && (
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>Log a meal</Text>
-            <TouchableOpacity onPress={() => setExpanded(false)}>
-              <Text style={styles.doneBtn}>Done ✓</Text>
+      {/* Full-screen modal panel */}
+      <Modal
+        visible={expanded}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setExpanded(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Log a meal</Text>
+              <TouchableOpacity onPress={() => setExpanded(false)}>
+                <Text style={styles.doneBtn}>Done ✓</Text>
+              </TouchableOpacity>
+            </View>
+
+            {meals.map((meal) => (
+              <MealRow
+                key={meal.id}
+                meal={meal}
+                onLog={(time, feel) => handleLog(meal.id, time, feel)}
+                onSwap={(data) => handleSwap(meal.id, data)}
+                onAddMore={(data) => handleAddMore(meal.id, data)}
+              />
+            ))}
+
+            {extraMeals.map((meal) => (
+              <MealRow
+                key={meal.id}
+                meal={meal}
+                onLog={(time, feel) => handleExtraLog(meal.id, time, feel)}
+                onSwap={(data) => handleExtraSwap(meal.id, data)}
+                onAddMore={(data) => handleExtraAddMore(meal.id, data)}
+              />
+            ))}
+
+            <TouchableOpacity style={styles.addSomethingElse} onPress={addExtraMeal}>
+              <Text style={styles.addSomethingElseText}>+ Add something else</Text>
             </TouchableOpacity>
           </View>
-
-          {meals.map((meal) => (
-            <MealRow
-              key={meal.id}
-              meal={meal}
-              onLog={(time, feel) => handleLog(meal.id, time, feel)}
-              onSwap={(data) => handleSwap(meal.id, data)}
-              onAddMore={(data) => handleAddMore(meal.id, data)}
-            />
-          ))}
-
-          {extraMeals.map((meal) => (
-            <MealRow
-              key={meal.id}
-              meal={meal}
-              onLog={(time, feel) => handleExtraLog(meal.id, time, feel)}
-              onSwap={(data) => handleExtraSwap(meal.id, data)}
-              onAddMore={(data) => handleExtraAddMore(meal.id, data)}
-            />
-          ))}
-
-          <TouchableOpacity style={styles.addSomethingElse} onPress={addExtraMeal}>
-            <Text style={styles.addSomethingElseText}>+ Add something else</Text>
-          </TouchableOpacity>
         </View>
-      )}
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: 10,
+    flex: 1,
   },
   tile: {
     backgroundColor: '#F8D8C8',
     borderRadius: 16,
     padding: 14,
     alignItems: 'center',
+    aspectRatio: 1,
+    justifyContent: 'center',
   },
   icon: {
     fontSize: 24,
@@ -597,12 +526,19 @@ const styles = StyleSheet.create({
   val: {
     fontSize: 11,
     color: '#C05040',
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
   },
   panel: {
     backgroundColor: '#D4806A',
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 8,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '90%',
   },
   panelHeader: {
     flexDirection: 'row',
@@ -785,5 +721,44 @@ const styles = StyleSheet.create({
   addSomethingElseText: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.7)',
+  },
+  searchInput: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 13,
+    color: '#fff',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  searchingText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: 8,
+  },
+  searchResults: {
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderRadius: 10,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  searchResultRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  searchResultText: {
+    fontSize: 13,
+    color: '#fff',
+    flex: 1,
+  },
+  searchResultCheck: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
   },
 });

@@ -6,6 +6,8 @@ import FoodTile from '../components/FoodTile';
 import WaterTile from '../components/WaterTile';
 import SleepTile from '../components/SleepTile';
 import MoodTile from '../components/MoodTile';
+import MovementTile from '../components/MovementTile';
+import CycleTile from '../components/CycleTile';
 import TodaysPlan from '../components/TodaysPlan';
 
 function getGreeting() {
@@ -30,22 +32,20 @@ export default function HomeScreen({ onProfilePress }) {
 
   async function loadProfile() {
     const { data: { user } } = await supabase.auth.getUser();
-
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('user_profiles')
       .select('first_name')
       .eq('user_id', user.id)
       .single();
-
-    if (data && data.first_name) {
-      setFirstName(data.first_name);
-    }
+    if (data && data.first_name) setFirstName(data.first_name);
   }
 
   const initial = firstName ? firstName.charAt(0).toUpperCase() : '?';
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
+
+      {/* Header */}
       <View style={styles.homeHeader}>
         <View>
           <Text style={styles.greeting}>
@@ -57,11 +57,27 @@ export default function HomeScreen({ onProfilePress }) {
           <Text style={styles.avatarText}>{initial}</Text>
         </TouchableOpacity>
       </View>
-      <FoodTile />
-      <WaterTile phase="luteal" />
-      <SleepTile />
-      <MoodTile />
+
+      {/* Row 1: Food, Movement, Water */}
+      <View style={styles.tileRow}>
+        <FoodTile />
+        <View style={styles.tileGap} />
+        <MovementTile />
+        <View style={styles.tileGap} />
+        <WaterTile phase="luteal" />
+      </View>
+
+      {/* Row 2: Mood, Sleep, Cycle */}
+      <View style={[styles.tileRow, styles.tileRowGap]}>
+        <MoodTile />
+        <View style={styles.tileGap} />
+        <SleepTile />
+        <View style={styles.tileGap} />
+        <CycleTile />
+      </View>
+
       <TodaysPlan />
+
     </ScrollView>
   );
 }
@@ -71,8 +87,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   screenContent: {
-    padding: 20,
-    paddingTop: 16,
+    padding: 16,
+    paddingTop: 12,
   },
   homeHeader: {
     flexDirection: 'row',
@@ -108,5 +124,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     fontWeight: '600',
+  },
+  tileRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  tileRowGap: {
+    marginTop: 8,
+  },
+  tileGap: {
+    width: 8,
   },
 });

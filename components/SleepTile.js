@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, Modal, ScrollView } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { supabase } from '../supabase';
 
@@ -13,7 +13,6 @@ export default function SleepTile() {
   const [note, setNote] = useState('');
   const [logged, setLogged] = useState(false);
   const [existingLogId, setExistingLogId] = useState(null);
-
   const [napped, setNapped] = useState(false);
   const [napMinutes, setNapMinutes] = useState('');
   const [napLogged, setNapLogged] = useState(false);
@@ -24,15 +23,13 @@ export default function SleepTile() {
 
   async function loadTodayLog() {
     const { data: { user } } = await supabase.auth.getUser();
-    const today = new Date().toISOString().split('T')[0];
-
-    const { data, error } = await supabase
+    const today = new Date().toLocaleDateString('en-CA');
+    const { data } = await supabase
       .from('sleep_logs')
       .select('*')
       .eq('user_id', user.id)
       .eq('date', today)
       .maybeSingle();
-
     if (data) {
       setHours(data.hours);
       setQuality(data.quality);
@@ -40,7 +37,6 @@ export default function SleepTile() {
       setNote(data.note || '');
       setLogged(true);
       setExistingLogId(data.id);
-
       if (data.napped) {
         setNapped(true);
         setNapMinutes(String(data.nap_duration_minutes || ''));
@@ -51,88 +47,37 @@ export default function SleepTile() {
 
   async function saveSleep() {
     const { data: { user } } = await supabase.auth.getUser();
-    const today = new Date().toISOString().split('T')[0];
-
-    const payload = {
-      user_id: user.id,
-      date: today,
-      hours: hours,
-      quality: quality,
-      woke_during_night: wokeDuringNight,
-      note: note || null,
-    };
-
+    const today = new Date().toLocaleDateString('en-CA');
+    const payload = { user_id: user.id, date: today, hours, quality, woke_during_night: wokeDuringNight, note: note || null };
     if (existingLogId) {
-      const { error } = await supabase
-        .from('sleep_logs')
-        .update(payload)
-        .eq('id', existingLogId);
-
-      if (error) {
-        console.log('Error updating sleep log:', error.message);
-        return;
-      }
+      const { error } = await supabase.from('sleep_logs').update(payload).eq('id', existingLogId);
+      if (error) { console.log('Error updating sleep log:', error.message); return; }
     } else {
-      const { data, error } = await supabase
-        .from('sleep_logs')
-        .insert(payload)
-        .select()
-        .single();
-
-      if (error) {
-        console.log('Error inserting sleep log:', error.message);
-        return;
-      }
+      const { data, error } = await supabase.from('sleep_logs').insert(payload).select().single();
+      if (error) { console.log('Error inserting sleep log:', error.message); return; }
       setExistingLogId(data.id);
     }
-
     setLogged(true);
   }
 
   async function saveNap() {
     const { data: { user } } = await supabase.auth.getUser();
-    const today = new Date().toISOString().split('T')[0];
-
-    const napPayload = {
-      napped: true,
-      nap_duration_minutes: parseFloat(napMinutes) || null,
-    };
-
+    const today = new Date().toLocaleDateString('en-CA');
+    const napPayload = { napped: true, nap_duration_minutes: parseFloat(napMinutes) || null };
     if (existingLogId) {
-      const { error } = await supabase
-        .from('sleep_logs')
-        .update(napPayload)
-        .eq('id', existingLogId);
-
-      if (error) {
-        console.log('Error saving nap:', error.message);
-        return;
-      }
+      const { error } = await supabase.from('sleep_logs').update(napPayload).eq('id', existingLogId);
+      if (error) { console.log('Error saving nap:', error.message); return; }
     } else {
-      const { data, error } = await supabase
-        .from('sleep_logs')
-        .insert({
-          user_id: user.id,
-          date: today,
-          hours: 0,
-          ...napPayload,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.log('Error saving nap:', error.message);
-        return;
-      }
+      const { data, error } = await supabase.from('sleep_logs').insert({ user_id: user.id, date: today, hours: 0, ...napPayload }).select().single();
+      if (error) { console.log('Error saving nap:', error.message); return; }
       setExistingLogId(data.id);
     }
-
     setNapLogged(true);
   }
 
   return (
     <View style={styles.wrapper}>
-      <TouchableOpacity style={styles.tile} onPress={() => setExpanded(!expanded)} activeOpacity={0.8}>
+      <TouchableOpacity style={styles.tile} onPress={() => setExpanded(true)} activeOpacity={0.8}>
         <Text style={styles.icon}>🌙</Text>
         <Text style={styles.label}>Sleep</Text>
         <Text style={styles.val}>
@@ -140,129 +85,138 @@ export default function SleepTile() {
         </Text>
       </TouchableOpacity>
 
-      {expanded && (
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>Sleep log</Text>
-            <TouchableOpacity onPress={() => setExpanded(false)}>
-              <Text style={styles.doneBtn}>Done ✓</Text>
-            </TouchableOpacity>
-          </View>
-
-          {logged ? (
-            <View style={styles.summaryBox}>
-              <Text style={styles.summaryText}>✓ {hours}h logged{quality ? ` · ${quality}` : ''}</Text>
-              {wokeDuringNight !== null && (
-                <Text style={styles.summarySubtext}>
-                  {wokeDuringNight ? 'Woke up during the night' : 'Slept through the night'}
-                </Text>
-              )}
-              {note && <Text style={styles.summarySubtext}>"{note}"</Text>}
-              <TouchableOpacity onPress={() => setLogged(false)}>
-                <Text style={styles.editText}>Edit sleep log</Text>
+      <Modal
+        visible={expanded}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setExpanded(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Sleep log</Text>
+              <TouchableOpacity onPress={() => setExpanded(false)}>
+                <Text style={styles.doneBtn}>Done ✓</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            <View>
-              <View style={styles.hoursRow}>
-                <Text style={styles.sectionLabel}>Hours of sleep</Text>
-                <Text style={styles.hoursDisplay}>{hours}h</Text>
+
+            {logged ? (
+              <View style={styles.summaryBox}>
+                <Text style={styles.summaryText}>✓ {hours}h logged{quality ? ` · ${quality}` : ''}</Text>
+                {wokeDuringNight !== null && (
+                  <Text style={styles.summarySubtext}>
+                    {wokeDuringNight ? 'Woke up during the night' : 'Slept through the night'}
+                  </Text>
+                )}
+                {note ? <Text style={styles.summarySubtext}>"{note}"</Text> : null}
+                <TouchableOpacity onPress={() => setLogged(false)}>
+                  <Text style={styles.editText}>Edit sleep log</Text>
+                </TouchableOpacity>
               </View>
-              <Slider
-                style={styles.slider}
-                minimumValue={0}
-                maximumValue={12}
-                step={0.5}
-                value={hours}
-                onValueChange={setHours}
-                minimumTrackTintColor="#fff"
-                maximumTrackTintColor="rgba(255,255,255,0.3)"
-                thumbTintColor="#fff"
-              />
-              <View style={styles.sliderLabels}>
-                <Text style={styles.sliderLabelText}>0h</Text>
-                <Text style={styles.sliderLabelText}>6h</Text>
-                <Text style={styles.sliderLabelText}>12h</Text>
+            ) : (
+              <View>
+                <View style={styles.hoursRow}>
+                  <Text style={styles.sectionLabel}>Hours of sleep</Text>
+                  <Text style={styles.hoursDisplay}>{hours}h</Text>
+                </View>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={0}
+                  maximumValue={12}
+                  step={0.5}
+                  value={hours}
+                  onValueChange={setHours}
+                  minimumTrackTintColor="#fff"
+                  maximumTrackTintColor="rgba(255,255,255,0.3)"
+                  thumbTintColor="#fff"
+                />
+                <View style={styles.sliderLabels}>
+                  <Text style={styles.sliderLabelText}>0h</Text>
+                  <Text style={styles.sliderLabelText}>6h</Text>
+                  <Text style={styles.sliderLabelText}>12h</Text>
+                </View>
+
+                <Text style={styles.sectionLabel}>How did you sleep?</Text>
+                <View style={styles.optionRow}>
+                  {QUALITIES.map((q) => (
+                    <TouchableOpacity
+                      key={q}
+                      style={[styles.optionBtn, quality === q && styles.optionBtnActive]}
+                      onPress={() => setQuality(q)}
+                    >
+                      <Text style={[styles.optionText, quality === q && styles.optionTextActive]}>{q}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.sectionLabel}>Did you wake up during the night?</Text>
+                <View style={styles.optionRow}>
+                  {['Yes', 'No'].map((v) => (
+                    <TouchableOpacity
+                      key={v}
+                      style={[styles.optionBtn, wokeDuringNight === (v === 'Yes') && styles.optionBtnActive]}
+                      onPress={() => setWokeDuringNight(v === 'Yes')}
+                    >
+                      <Text style={[styles.optionText, wokeDuringNight === (v === 'Yes') && styles.optionTextActive]}>{v}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TextInput
+                  style={styles.noteInput}
+                  placeholder="Anything to add? (optional)"
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  value={note}
+                  onChangeText={setNote}
+                  multiline
+                />
+
+                <TouchableOpacity style={styles.saveBtn} onPress={saveSleep}>
+                  <Text style={styles.saveBtnText}>Save sleep log</Text>
+                </TouchableOpacity>
               </View>
+            )}
 
-              <Text style={styles.sectionLabel}>How did you sleep?</Text>
-              <View style={styles.optionRow}>
-                {QUALITIES.map((q) => (
-                  <TouchableOpacity
-                    key={q}
-                    style={[styles.optionBtn, quality === q && styles.optionBtnActive]}
-                    onPress={() => setQuality(q)}
-                  >
-                    <Text style={[styles.optionText, quality === q && styles.optionTextActive]}>{q}</Text>
-                  </TouchableOpacity>
-                ))}
+            <View style={styles.napDivider} />
+
+            <Text style={styles.sectionLabel}>Did you nap today?</Text>
+            {napLogged ? (
+              <Text style={styles.napLoggedText}>
+                ✓ Nap logged{napMinutes ? ` -- ${napMinutes} min` : ''}
+              </Text>
+            ) : (
+              <View>
+                <TextInput
+                  style={styles.napInput}
+                  placeholder="How many minutes?"
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  value={napMinutes}
+                  onChangeText={setNapMinutes}
+                  keyboardType="numeric"
+                />
+                <TouchableOpacity style={styles.napSaveBtn} onPress={saveNap}>
+                  <Text style={styles.napSaveBtnText}>Log nap</Text>
+                </TouchableOpacity>
               </View>
-
-              <Text style={styles.sectionLabel}>Did you wake up during the night?</Text>
-              <View style={styles.optionRow}>
-                {['Yes', 'No'].map((v) => (
-                  <TouchableOpacity
-                    key={v}
-                    style={[styles.optionBtnWide, wokeDuringNight === (v === 'Yes') && styles.optionBtnActive]}
-                    onPress={() => setWokeDuringNight(v === 'Yes')}
-                  >
-                    <Text style={[styles.optionText, wokeDuringNight === (v === 'Yes') && styles.optionTextActive]}>{v}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TextInput
-                style={styles.noteInput}
-                placeholder="Anything to add? (optional)"
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                value={note}
-                onChangeText={setNote}
-                multiline
-              />
-
-              <TouchableOpacity style={styles.saveBtn} onPress={saveSleep}>
-                <Text style={styles.saveBtnText}>Save sleep log</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <View style={styles.napDivider} />
-
-          <Text style={styles.sectionLabel}>Did you nap today?</Text>
-          {napLogged ? (
-            <Text style={styles.napLoggedText}>
-              ✓ Nap logged{napMinutes ? ` -- ${napMinutes} min` : ''}
-            </Text>
-          ) : (
-            <View>
-              <TextInput
-                style={styles.napInput}
-                placeholder="How many minutes?"
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                value={napMinutes}
-                onChangeText={setNapMinutes}
-                keyboardType="numeric"
-              />
-              <TouchableOpacity style={styles.napSaveBtn} onPress={saveNap}>
-                <Text style={styles.napSaveBtnText}>Log nap</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+            )}
+          </ScrollView>
         </View>
-      )}
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: 10,
+    flex: 1,
   },
   tile: {
     backgroundColor: '#DCD0E8',
     borderRadius: 16,
     padding: 14,
     alignItems: 'center',
+    aspectRatio: 1,
+    justifyContent: 'center',
   },
   icon: {
     fontSize: 24,
@@ -278,12 +232,21 @@ const styles = StyleSheet.create({
   val: {
     fontSize: 11,
     color: '#6B4FA0',
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
   },
   panel: {
     backgroundColor: '#9B7EC8',
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 8,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+  },
+  panelContent: {
+    padding: 20,
   },
   panelHeader: {
     flexDirection: 'row',
@@ -299,6 +262,29 @@ const styles = StyleSheet.create({
   doneBtn: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.8)',
+  },
+  summaryBox: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 4,
+  },
+  summaryText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  summarySubtext: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.75)',
+    marginBottom: 4,
+  },
+  editText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    textDecorationLine: 'underline',
+    marginTop: 4,
   },
   hoursRow: {
     flexDirection: 'row',
@@ -342,15 +328,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 10,
     paddingVertical: 9,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  optionBtnWide: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 10,
-    paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: 'transparent',
@@ -417,28 +394,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#fff',
     fontWeight: '600',
-  },
-  summaryBox: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 4,
-  },
-  summaryText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  summarySubtext: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.75)',
-    marginBottom: 4,
-  },
-  editText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    textDecorationLine: 'underline',
-    marginTop: 4,
   },
 });
