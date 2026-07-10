@@ -2,13 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, TextInput, StyleSheet, Modal } from 'react-native';
 import { supabase } from '../supabase';
 
-function getWaterNote(ounces, goal, phase) {
-  if (ounces >= goal) return 'Goal reached! Great hydration today.';
-  if (ounces >= goal - 16) return `Almost there! Just ${Math.round(goal - ounces)} more oz to go.`;
-  return `You're in ${phase} phase -- hydration supports your body right now.`;
-}
-
-export default function WaterTile({ phase = 'luteal' }) {
+export default function WaterTile() {
   const [expanded, setExpanded] = useState(false);
   const [ounces, setOunces] = useState(0);
   const [goalOunces, setGoalOunces] = useState(64);
@@ -123,8 +117,6 @@ export default function WaterTile({ phase = 'luteal' }) {
                 <Text style={styles.customAddText}>Log</Text>
               </TouchableOpacity>
             </View>
-
-            <Text style={styles.note}>{getWaterNote(ounces, goalOunces, phase)}</Text>
           </View>
         </View>
       </Modal>
@@ -261,11 +253,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#fff',
     fontWeight: '600',
-  },
-  note: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    fontStyle: 'italic',
-    lineHeight: 18,
   },
 });

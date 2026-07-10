@@ -9,11 +9,6 @@ const PORTIONS = ['Small', 'Medium', 'Large', 'Extra large'];
 const FEELS = ['Satisfied', 'Unsatisfied'];
 const SOURCES = ['Homemade', 'Restaurant'];
 
-const NYLA_RESPONSES = {
-  Satisfied: 'That\'s a great sign -- your body is responding well to this meal in luteal phase.',
-  Unsatisfied: 'Luteal cravings are real -- progesterone drives appetite up. A small protein snack can help bridge the gap.',
-};
-
 const DEFAULT_MEALS = [
   { id: 'morning', period: 'Morning', name: 'Scrambled eggs with spinach & sourdough' },
   { id: 'midday', period: 'Midday', name: 'Lentil soup with crusty bread' },
@@ -286,11 +281,6 @@ function MealRow({ meal, onLog, onSwap, onAddMore }) {
               + {meal.extras.map(e => e.items.map(i => i.description).join(', ')).join(', ')}
             </Text>
           )}
-          {meal.nylaResponse && (
-            <View style={styles.nylaResponse}>
-              <Text style={styles.nylaResponseText}>🌸 {meal.nylaResponse}</Text>
-            </View>
-          )}
           <TouchableOpacity style={styles.addMoreBtn} onPress={() => setAddingMore(true)}>
             <Text style={styles.addMoreText}>+ Add more</Text>
           </TouchableOpacity>
@@ -330,7 +320,7 @@ export default function FoodTile() {
     });
     if (error) { console.log('Error logging meal:', error.message); return; }
     setMeals(meals.map((m) =>
-      m.id === id ? { ...m, logged: true, loggedTime: time, nylaResponse: NYLA_RESPONSES[feel] } : m
+      m.id === id ? { ...m, logged: true, loggedTime: time} : m
     ));
   }
 
@@ -352,7 +342,7 @@ export default function FoodTile() {
     });
     if (error) { console.log('Error logging swap:', error.message); return; }
     setMeals(meals.map((m) =>
-      m.id === id ? { ...m, logged: true, loggedTime: time, name: newName, nylaResponse: NYLA_RESPONSES[data.feel] } : m
+      m.id === id ? { ...m, logged: true, loggedTime: time, name: newName} : m
     ));
   }
 
@@ -391,7 +381,7 @@ export default function FoodTile() {
     });
     if (error) { console.log('Error logging extra meal:', error.message); return; }
     setExtraMeals(extraMeals.map((m) =>
-      m.id === id ? { ...m, logged: true, loggedTime: time, nylaResponse: NYLA_RESPONSES[feel] } : m
+      m.id === id ? { ...m, logged: true, loggedTime: time} : m
     ));
   }
 
@@ -413,7 +403,7 @@ export default function FoodTile() {
     });
     if (error) { console.log('Error logging extra swap:', error.message); return; }
     setExtraMeals(extraMeals.map((m) =>
-      m.id === id ? { ...m, logged: true, loggedTime: time, name: newName, nylaResponse: NYLA_RESPONSES[data.feel] } : m
+      m.id === id ? { ...m, logged: true, loggedTime: time, name: newName} : m
     ));
   }
 
@@ -614,18 +604,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: 'rgba(255,255,255,0.6)',
     marginBottom: 6,
-    fontStyle: 'italic',
-  },
-  nylaResponse: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 8,
-  },
-  nylaResponseText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.85)',
-    lineHeight: 18,
     fontStyle: 'italic',
   },
   addMoreBtn: {

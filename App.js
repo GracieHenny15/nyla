@@ -6,8 +6,10 @@ import { supabase } from './supabase';
 import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import CycleScreen from './screens/CycleScreen';
+import useCycleState from './useCycleState';
 
-const TABS = ['Home', 'Cycle', 'Today', 'Plan'];
+const TABS = ['Home', 'Plan', 'Cycle', 'Progress'];
 
 function PlaceholderScreen({ name }) {
   return (
@@ -23,6 +25,7 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [session, setSession] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const { phase } = useCycleState();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -43,11 +46,12 @@ export default function App() {
     return <LoginScreen />;
   }
 
-  function renderScreen() {
-    if (showProfile) return <ProfileScreen onBack={() => setShowProfile(false)} />;
-    if (activeTab === 'Home') return <HomeScreen onProfilePress={() => setShowProfile(true)} />;
-    return <PlaceholderScreen name={activeTab} />;
-  }
+function renderScreen() {
+  if (showProfile) return <ProfileScreen onBack={() => setShowProfile(false)} />;
+  if (activeTab === 'Home') return <HomeScreen onProfilePress={() => setShowProfile(true)} phase={phase} />;
+  if (activeTab === 'Cycle') return <CycleScreen />;
+  return <PlaceholderScreen name={activeTab} />;
+}
 
   return (
     <SafeAreaView style={styles.container}>

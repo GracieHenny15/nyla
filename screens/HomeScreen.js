@@ -23,7 +23,7 @@ function getFormattedDate() {
   return today.toLocaleDateString('en-US', options);
 }
 
-export default function HomeScreen({ onProfilePress }) {
+export default function HomeScreen({ onProfilePress, phase }) {
   const [firstName, setFirstName] = useState('');
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function HomeScreen({ onProfilePress }) {
         <View style={styles.tileGap} />
         <MovementTile />
         <View style={styles.tileGap} />
-        <WaterTile phase="luteal" />
+        <WaterTile phase={phase} />
       </View>
 
       {/* Row 2: Mood, Sleep, Cycle */}
