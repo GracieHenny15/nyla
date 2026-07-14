@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView, Modal } from 'react-native';
 import { C } from '../constants';
 import useCycleState from '../useCycleState';
 import { PHASES, getDaysUntilPeriod, getUpcomingPhases } from '../cycleUtils';
+import { supabase } from '../supabase';
+import Svg, { Circle, Text as SvgText } from 'react-native-svg';
+import CycleCalendar from '../components/CycleCalendar';
 
 const PHASE_ORDER = ['menstrual', 'follicular', 'ovulation', 'luteal'];
 
@@ -89,6 +92,18 @@ export default function CycleScreen() {
     markPeriodStarted,
   } = useCycleState();
   const [expandedPhase, setExpandedPhase] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [periodHistory, setPeriodHistory] = useState([]);
+  async function loadPeriodHistory() {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from('period_history')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('period_start_date', { ascending: false });
+    if (error) { console.log('Error loading period history:', error.message); return; }
+    setPeriodHistory(data || []);
+  }
 
   if (loading) {
     return (
@@ -132,49 +147,100 @@ export default function CycleScreen() {
         {/* Header */}
         <View style={styles.headerRow}>
           <Text style={styles.screenTitle}>Your cycle</Text>
-          <TouchableOpacity style={styles.historyBtn}>
+<TouchableOpacity
+            style={styles.historyBtn}
+            onPress={async () => {
+              await loadPeriodHistory();
+              setShowHistory(true);
+            }}
+          >
             <Text style={styles.historyBtnText}>📅 History</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.screenSub}>
-          Day {cycleDay} of {cycleLength} · {isOnPeriod ? 'Period in progress' : `Period in ${daysUntilPeriod} days`}
-        </Text>
-
         {/* Cycle wheel + legend */}
         <View style={styles.wheelSection}>
           <View style={styles.wheelContainer}>
-            <View style={[styles.wheelOuter, { borderColor: phaseColor }]}>
-              <View style={styles.wheelInner}>
-                <Text style={[styles.wheelPhase, { color: phaseColor }]}>{phaseData.name}</Text>
-                <Text style={styles.wheelDay}>Day {cycleDay}</Text>
-                <Text style={styles.wheelSub}>of {cycleLength}</Text>
-              </View>
-            </View>
+            <Svg width={160} height={160} viewBox="0 0 160 160">
+              {(() => {
+                const cx = 80, cy = 80, r = 62, strokeW = 16;
+                const circumference = 2 * Math.PI * r;
+                const follicularLen = cycleLength - 5 - 3 - 13;
+                const phaseLengths = { menstrual: 5, follicular: follicularLen, ovulation: 3, luteal: 13 };
+                let offset = 0;
+                return PHASE_ORDER.map((p) => {
+                  const len = phaseLengths[p];
+                  const dash = (len / cycleLength) * circumference;
+                  const gap = circumference - dash;
+                  const strokeDashoffset = -(offset / cycleLength) * circumference;
+                  offset += len;
+                  return (
+                    <Circle
+                      key={p}
+                      cx={cx} cy={cy} r={r}
+                      fill="none"
+                      stroke={PHASE_COLORS[p]}
+                      strokeWidth={strokeW}
+                      strokeDasharray={`${dash} ${gap}`}
+                      strokeDashoffset={strokeDashoffset}
+                      transform={`rotate(-90 ${cx} ${cy})`}
+                    />
+                  );
+                });
+              })()}
+              {(() => {
+                const angle = ((cycleDay - 1) / cycleLength) * 2 * Math.PI - Math.PI / 2;
+                const dotX = 80 + 62 * Math.cos(angle);
+                const dotY = 80 + 62 * Math.sin(angle);
+                return <Circle cx={dotX} cy={dotY} r={6} fill="#fff" stroke={phaseColor} strokeWidth={2.5} />;
+              })()}
+              <Circle cx={80} cy={80} r={52} fill={C.bg} />
+              <SvgText x={80} y={74} textAnchor="middle" fontFamily="serif" fontSize={12} fill={phaseColor}>
+                {phaseData.name}
+              </SvgText>
+              <SvgText x={80} y={94} textAnchor="middle" fontSize={22} fontWeight="700" fill={C.espresso}>
+                {`Day ${cycleDay}`}
+              </SvgText>
+              <SvgText x={80} y={108} textAnchor="middle" fontSize={11} fill={C.muted}>
+                {`of ${cycleLength}`}
+              </SvgText>
+            </Svg>
           </View>
 
-          <View style={styles.legend}>
-            {[0, 1].map((rowIndex) => (
-              <View key={rowIndex} style={styles.legendRowPair}>
-                {[0, 1].map((colIndex) => {
-                  const p = PHASE_ORDER[rowIndex * 2 + colIndex];
-                  return (
-                    <View key={p} style={styles.legendItem}>
-                      <View style={[
-                        styles.legendDot,
-                        { backgroundColor: PHASE_COLORS[p] },
-                        p === phase && styles.legendDotActive,
-                      ]} />
-                      <View>
+<View style={styles.legendColumn}>
+            <View style={styles.legend}>
+              {[0, 1].map((rowIndex) => (
+                <View key={rowIndex} style={styles.legendRowPair}>
+                  {[0, 1].map((colIndex) => {
+                    const p = PHASE_ORDER[rowIndex * 2 + colIndex];
+                    return (
+                      <View key={p} style={styles.legendItem}>
+                        <View style={[
+                          styles.legendDot,
+                          { backgroundColor: PHASE_COLORS[p] },
+                          p === phase && styles.legendDotActive,
+                        ]} />
                         <Text style={[styles.legendName, p === phase && styles.legendNameActive]}>
                           {PHASES[p].name}
                         </Text>
-                        <Text style={styles.legendDays}>{PHASE_DAY_RANGES[p]}</Text>
                       </View>
-                    </View>
-                  );
-                })}
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+
+            {!isOnPeriod && (
+              <View style={styles.countdownInline}>
+                <Text style={styles.countdownInlineLabel}>Next period in</Text>
+                <Text style={styles.countdownInlineDays}>{daysUntilPeriod} {daysUntilPeriod === 1 ? 'day' : 'days'}</Text>
               </View>
-            ))}
+            )}
+            {isOnPeriod && (
+              <View style={styles.countdownInline}>
+                <Text style={styles.countdownInlineLabel}>Period in progress</Text>
+                <Text style={styles.countdownInlineDays}>Day {cycleDay}</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -235,7 +301,14 @@ export default function CycleScreen() {
           </TouchableOpacity>
         ))}
 
-      </ScrollView>
+</ScrollView>
+
+<CycleCalendar
+        visible={showHistory}
+        onClose={() => setShowHistory(false)}
+        periodHistory={periodHistory}
+        cycleLength={cycleLength}
+      />
     </SafeAreaView>
   );
 }
@@ -321,44 +394,16 @@ const styles = StyleSheet.create({
   },
   wheelSection: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 20,
+    alignItems: 'flex-start',
+    gap: 16,
     marginBottom: 16,
   },
   wheelContainer: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  wheelOuter: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: C.card,
-  },
-  wheelInner: {
-    alignItems: 'center',
-  },
-  wheelPhase: {
-    fontFamily: 'serif',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  wheelDay: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: C.espresso,
-  },
-  wheelSub: {
-    fontSize: 11,
-    color: C.muted,
-  },
   legend: {
-    flex: 1,
-    gap: 8,
+    gap: 6,
   },
   legendRowPair: {
     flexDirection: 'row',
@@ -388,10 +433,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: C.espresso,
     fontWeight: '600',
-  },
-  legendDays: {
-    fontSize: 10,
-    color: C.sand,
   },
   youAreHereCard: {
     borderRadius: 16,
@@ -551,5 +592,99 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: C.muted,
     lineHeight: 18,
+  },
+  legendColumn: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 8,
+  },
+  countdownInline: {
+    marginTop: 4,
+  },
+  countdownInlineLabel: {
+    fontSize: 10,
+    color: C.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  countdownInlineDays: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: C.espresso,
+    fontFamily: 'serif',
+  },
+  historyOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  historyPanel: {
+    backgroundColor: C.bg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  historyTitle: {
+    fontFamily: 'serif',
+    fontSize: 20,
+    color: C.espresso,
+  },
+  historyClose: {
+    fontSize: 13,
+    color: C.muted,
+  },
+  historyEmpty: {
+    fontSize: 13,
+    color: C.muted,
+    textAlign: 'center',
+    paddingVertical: 20,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingVertical: 14,
+  },
+  historyRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: C.linen,
+  },
+  historyDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: C.rose,
+    marginTop: 4,
+    flexShrink: 0,
+  },
+  historyRowContent: {
+    flex: 1,
+  },
+  historyStartDate: {
+    fontSize: 14,
+    color: C.espresso,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  historyEndDate: {
+    fontSize: 12,
+    color: C.muted,
+    marginBottom: 2,
+  },
+  historyCycleLen: {
+    fontSize: 11,
+    color: C.teal,
+    marginBottom: 2,
+  },
+  historySource: {
+    fontSize: 10,
+    color: C.sand,
   },
 });

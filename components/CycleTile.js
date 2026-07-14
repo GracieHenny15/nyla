@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView } from 'react-native';
 import { supabase } from '../supabase';
+import CycleCalendar from '../components/CycleCalendar';
 
 const FLOW_OPTIONS = ['Light', 'Moderate', 'Heavy'];
 const PERIOD_SYMPTOMS = ['Cramps', 'Bloating', 'Headache', 'Fatigue', 'Tender', 'Back pain', 'Nausea', 'No symptoms'];
