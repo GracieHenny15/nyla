@@ -8,6 +8,7 @@ import LoginScreen from './screens/LoginScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import CycleScreen from './screens/CycleScreen';
 import useCycleState from './useCycleState';
+import PlanScreen from './screens/PlanScreen';
 
 const TABS = ['Home', 'Plan', 'Cycle', 'Progress'];
 
@@ -49,6 +50,7 @@ export default function App() {
 function renderScreen() {
   if (showProfile) return <ProfileScreen onBack={() => setShowProfile(false)} />;
   if (activeTab === 'Home') return <HomeScreen onProfilePress={() => setShowProfile(true)} phase={phase} />;
+    if (activeTab === 'Plan') return <PlanScreen />;
   if (activeTab === 'Cycle') return <CycleScreen />;
   return <PlaceholderScreen name={activeTab} />;
 }
